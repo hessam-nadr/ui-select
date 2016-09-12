@@ -6,7 +6,7 @@
  */
 
 
-(function () { 
+(function () {
 "use strict";
 var KEY = {
     TAB: 9,
@@ -105,6 +105,7 @@ var uis = angular.module('ui.select', [])
 .constant('uiSelectConfig', {
   theme: 'bootstrap',
   searchEnabled: true,
+  allowFreeText: false,
   sortable: false,
   placeholder: '', // Empty by default, like HTML tag <select>
   refreshDelay: 1000, // In milliseconds
@@ -218,7 +219,7 @@ uis.directive('uiSelectChoices',
 
       choices.attr('ng-repeat', parserResult.repeatExpression(groupByExp))
              .attr('ng-if', '$select.open'); //Prevent unnecessary watches when dropdown is closed
-    
+
 
       var rowsInner = tElement.querySelectorAll('.ui-select-choices-row-inner');
       if (rowsInner.length !== 1) {
@@ -226,19 +227,19 @@ uis.directive('uiSelectChoices',
       }
       rowsInner.attr('uis-transclude-append', ''); //Adding uisTranscludeAppend directive to row element after choices element has ngRepeat
 
-      // If IE8 then need to target rowsInner to apply the ng-click attr as choices will not capture the event. 
+      // If IE8 then need to target rowsInner to apply the ng-click attr as choices will not capture the event.
       var clickTarget = $window.document.addEventListener ? choices : rowsInner;
       clickTarget.attr('ng-click', '$select.select(' + parserResult.itemName + ',$select.skipFocusser,$event)');
-      
+
       return function link(scope, element, attrs, $select) {
 
-       
+
         $select.parseRepeatAttr(attrs.repeat, groupByExp, groupFilterExp); //Result ready at $select.parserResult
 
         $select.disableChoiceExpression = attrs.uiDisableChoice;
         $select.onHighlightCallback = attrs.onHighlight;
 
-        $select.dropdownPosition = attrs.position ? attrs.position.toLowerCase() : uiSelectConfig.dropdownPosition;        
+        $select.dropdownPosition = attrs.position ? attrs.position.toLowerCase() : uiSelectConfig.dropdownPosition;
 
         scope.$on('$destroy', function() {
           choices.remove();
@@ -281,6 +282,7 @@ uis.controller('uiSelectCtrl',
   ctrl.placeholder = uiSelectConfig.placeholder;
   ctrl.searchEnabled = uiSelectConfig.searchEnabled;
   ctrl.sortable = uiSelectConfig.sortable;
+  ctrl.allowFreeText = uiSelectConfig.allowFreeText;
   ctrl.refreshDelay = uiSelectConfig.refreshDelay;
   ctrl.paste = uiSelectConfig.paste;
   ctrl.resetSearchInput = uiSelectConfig.resetSearchInput;
@@ -349,7 +351,7 @@ uis.controller('uiSelectCtrl',
 
   // Most of the time the user does not want to empty the search input when in typeahead mode
   function _resetSearchInput() {
-    if (ctrl.resetSearchInput) {
+    if (ctrl.resetSearchInput || (ctrl.resetSearchInput === undefined && uiSelectConfig.resetSearchInput)) {
       ctrl.search = EMPTY_SEARCH;
       //reset activeIndex
       if (ctrl.selected && ctrl.items.length && !ctrl.multiple) {
@@ -424,7 +426,8 @@ uis.controller('uiSelectCtrl',
     }
     else if (ctrl.open && !ctrl.searchEnabled) {
       // Close the selection if we don't have search enabled, and we click on the select again
-      ctrl.close();
+      //ctrl.close();
+      //ehdi
     }
   };
 
@@ -689,7 +692,7 @@ uis.controller('uiSelectCtrl',
             ctrl.close(skipFocusser);
             return;
           }
-        }        
+        }
         _resetSearchInput();
         $scope.$broadcast('uis:select', item);
 
@@ -705,6 +708,9 @@ uis.controller('uiSelectCtrl',
 
         if (ctrl.closeOnSelect) {
           ctrl.close(skipFocusser);
+        }
+        if ($event && $event.type === 'click') {
+          ctrl.clickTriggeredSelect = true;
         }
       }
     }
@@ -860,6 +866,18 @@ uis.controller('uiSelectCtrl',
     return processed;
   }
 
+  function _handleBlurAndTab() {
+    if (ctrl.allowFreeText && ctrl.search) { // Make sure that the search is not empty, otherwise the blur event will override the tab keydown event
+      ctrl.select(ctrl.search);
+      ctrl.close();
+      ctrl.search = EMPTY_SEARCH;
+    }
+  }
+
+  ctrl.searchInput.on('blur', function() {
+    _handleBlurAndTab();
+  });
+
   // Bind to keyboard shortcuts
   ctrl.searchInput.on('keydown', function(e) {
 
@@ -905,6 +923,14 @@ uis.controller('uiSelectCtrl',
           }
         }
       }
+      else if(~[KEY.ESC,KEY.TAB].indexOf(key)){
+        if (!ctrl.allowFreeText) {
+          ctrl.close();
+        }
+        else {
+          _handleBlurAndTab();
+        }
+      }
 
     });
 
@@ -945,16 +971,18 @@ uis.controller('uiSelectCtrl',
         if (items.length === 0) {
           items = [data];
         }
+        if (items.length > 0) {
         var oldsearch = ctrl.search;
-        angular.forEach(items, function (item) {
-          var newItem = ctrl.tagging.fct ? ctrl.tagging.fct(item) : item;
-          if (newItem) {
-            ctrl.select(newItem, true);
-          }
-        });
-        ctrl.search = oldsearch || EMPTY_SEARCH;
-        e.preventDefault();
-        e.stopPropagation();
+          angular.forEach(items, function (item) {
+            var newItem = ctrl.tagging.fct ? ctrl.tagging.fct(item) : item;
+            if (newItem) {
+              ctrl.select(newItem, true);
+            }
+          });
+          ctrl.search = oldsearch || EMPTY_SEARCH;
+          e.preventDefault();
+          e.stopPropagation();
+        }
       } else if (ctrl.paste) {
         ctrl.paste(data);
         ctrl.search = EMPTY_SEARCH;
@@ -1106,6 +1134,11 @@ uis.directive('uiSelect',
         attrs.$observe('disabled', function() {
           // No need to use $eval() (thanks to ng-disabled) since we already get a boolean instead of a string
           $select.disabled = attrs.disabled !== undefined ? attrs.disabled : false;
+        });
+
+        attrs.$observe('allowFreeText', function(allowFreeText) {
+          // No need to use $eval() (thanks to ng-disabled) since we already get a boolean instead of a string
+          $select.allowFreeText = (angular.isDefined(allowFreeText)) ? (allowFreeText === '') ? true : (allowFreeText.toLowerCase() === 'true') : false;
         });
 
         attrs.$observe('resetSearchInput', function() {
@@ -1371,7 +1404,7 @@ uis.directive('uiSelect',
         };
 
         var opened = false;
-        
+
         scope.calculateDropdownPos = function() {
           if ($select.open) {
             dropdown = angular.element(element).querySelectorAll('.ui-select-dropdown');
@@ -1430,7 +1463,7 @@ uis.directive('uiSelectMatch', ['uiSelectConfig', function(uiSelectConfig) {
       var theme = getAttribute(parent, 'theme') || uiSelectConfig.theme;
       var multi = angular.isDefined(getAttribute(parent, 'multiple'));
 
-      return theme + (multi ? '/match-multiple.tpl.html' : '/match.tpl.html');      
+      return theme + (multi ? '/match-multiple.tpl.html' : '/match.tpl.html');
     },
     link: function(scope, element, attrs, $select) {
       $select.lockChoiceExpression = attrs.uiLockChoice;
@@ -1718,11 +1751,11 @@ uis.directive('uiSelectMultiple', ['uiSelectMinErr','$timeout', function(uiSelec
                 } else {
                   return curr;
                 }
-                
+
               } else {
                 // If nothing yet selected, select last item
-                return last;  
-              }              
+                return last;
+              }
               break;
             case KEY.DELETE:
               // Remove selected item and select next item
@@ -1926,7 +1959,7 @@ uis.directive('uiSelectNoChoice',
             templateUrl: function (tElement) {
                 // Needed so the uiSelect can detect the transcluded content
                 tElement.addClass('ui-select-no-choice');
-      
+
                 // Gets theme attribute from parent (ui-select)
                 var theme = tElement.parent().attr('theme') || uiSelectConfig.theme;
                 return theme + '/no-choice.tpl.html';
@@ -2295,12 +2328,12 @@ uis.service('uisRepeatParser', ['uiSelectMinErr','$parse', function(uiSelectMinE
       throw uiSelectMinErr('iexp', "Expected expression in form of '_item_ in _collection_[ track by _id_]' but got '{0}'.",
               expression);
     }
-    
-    var source = match[5], 
+
+    var source = match[5],
         filters = '';
 
     // When using (key,value) ui-select requires filters to be extracted, since the object
-    // is converted to an array for $select.items 
+    // is converted to an array for $select.items
     // (in which case the filters need to be reapplied)
     if (match[3]) {
       // Remove any enclosing parenthesis
@@ -2310,7 +2343,7 @@ uis.service('uisRepeatParser', ['uiSelectMinErr','$parse', function(uiSelectMinE
       if(filterMatch && filterMatch[1].trim()) {
         filters = filterMatch[1];
         source = source.replace(filters, '');
-      }      
+      }
     }
 
     return {
@@ -2326,7 +2359,7 @@ uis.service('uisRepeatParser', ['uiSelectMinErr','$parse', function(uiSelectMinE
           expression += ' track by ' + this.trackByExp;
         }
         return expression;
-      } 
+      }
     };
 
   };
