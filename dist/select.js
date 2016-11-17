@@ -1,7 +1,7 @@
 /*!
  * ui-select
  * https://github.com/ehdi/ui-select
- * Version: 0.19.7
+ * Version: 0.19.8
  * License: MIT
  */
 
@@ -2029,7 +2029,8 @@ uis.directive('uiSelectSingle', ['$timeout','$compile', function($timeout, $comp
       scope.$on('uis:close', function (event, skipFocusser) {
         $timeout(function(){
           $select.focusser.prop('disabled', false);
-          if (!skipFocusser) $select.focusser[0].focus();
+          //disable foucs back
+          //if (!skipFocusser) $select.focusser[0].focus();
         },0,false);
       });
 
