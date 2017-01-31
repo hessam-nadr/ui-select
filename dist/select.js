@@ -114,6 +114,7 @@ var uis = angular.module('ui.select', [])
   dropdownPosition: 'auto',
   removeSelected: true,
   resetSearchInput: true,
+  inputFormat:null,
   generateId: function() {
     return latestId++;
   },
@@ -286,6 +287,7 @@ uis.controller('uiSelectCtrl',
   ctrl.refreshDelay = uiSelectConfig.refreshDelay;
   ctrl.paste = uiSelectConfig.paste;
   ctrl.resetSearchInput = uiSelectConfig.resetSearchInput;
+  ctrl.inputFormat = uiSelectConfig.inputFormat;
 
   ctrl.removeSelected = uiSelectConfig.removeSelected; //If selected item(s) should be removed from dropdown list
   ctrl.closeOnSelect = true; //Initialized inside uiSelect directive link function
@@ -356,7 +358,11 @@ uis.controller('uiSelectCtrl',
       //reset activeIndex
       if (ctrl.selected && ctrl.items.length && !ctrl.multiple) {
         ctrl.activeIndex = _findIndex(ctrl.items, function(item){
-          return angular.equals(this, item);
+          if(ctrl.inputFormat){
+            return angular.equals(this, item[ctrl.inputFormat]);
+          }else{
+            return angular.equals(this, item);
+          }
         }, ctrl.selected);
       }
     }
@@ -1104,6 +1110,11 @@ uis.directive('uiSelect',
 
         //Set reference to ngModel from uiSelectCtrl
         $select.ngModel = ngModel;
+
+        if(attrs.inputFormat){
+          $select.inputFormat = attrs.inputFormat
+
+        }
 
         $select.choiceGrouped = function(group){
           return $select.isGrouped && group && group.name;
